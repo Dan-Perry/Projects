@@ -1,0 +1,161 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <string.h>
+#include <assert.h>
+
+int main(int argc, char*argv[]) {
+    FILE *f;
+    unsigned int **tagArray;	//Define Tag and LRU array pointers
+    int **lruArray;
+    unsigned int trace;
+    int cacheSize = atoi(argv[1]); //Input K, L, and C values from main method.
+    int lineSize = atoi(argv[2]);
+    int cacheWay = atoi(argv[3]);
+    char* fileName = argv[4]; 	//Input File name from Char array in main method.
+    unsigned int Tag;
+    unsigned int Set;
+    int numSets = cacheSize/(lineSize*cacheWay); //Determine the number of Sets in the cache
+    int HitWay;					//Define initial variables
+    double missRate;
+    double Hits = 0;
+    double totalAccesses = 0;
+    int i,j;
+    
+
+    tagArray = (unsigned int **) malloc(numSets*sizeof(unsigned int *));	//Reserve 2D space for tag array based on # of sets and cache way.
+    for (i=0; i<numSets; i++) tagArray[i] = (unsigned int *) malloc(cacheWay*sizeof(unsigned int));
+
+    lruArray = (int **) malloc(numSets*sizeof(int *));
+        for (i=0; i<numSets; i++) lruArray[i] = (int *) malloc(cacheWay*sizeof(int));	//Reserve 2D space for LRU array
+        for (i=0; i<numSets; i++) for(j=0;j<cacheWay;j++) lruArray[i][j] = -1;		//Set entire LRU array to -1.
+
+
+    int offSetLength = offsetLength(lineSize); 		//Calculate the # of offset bets in trace address
+    int setIndexLength = setindexLength(cacheSize, lineSize, cacheWay);		//Calculate the # of set bits in the trace address.
+    int tagBitLength = (32-setIndexLength-offSetLength);	//Calculae # of tag bits in trace address.
+    //printf("Number of Tag Bits: %d\n", tagBitLength);
+
+
+
+    f=fopen(fileName,"r"); 	//Open the file inputted from main array.
+    if (f==NULL){
+        printf("file doesnt exist?!\n");	//if fopen() returns null return file doesn't exist.
+        return 1; 	//Leave main method.
+    }
+
+    while (fscanf(f, "%x", &trace)==1) {	//For every trace within the file, scan line by line and check if there is a cache hit or miss.
+        Tag = tagBits(tagBitLength, trace);		//Extract tag from address
+        Set = whichSet(trace, tagBitLength, setIndexLength, offSetLength);	//Extract set from trace address.
+    //printTagArray(tagArray, numSets, cacheWay);	
+        HitWay = hitWay(tagArray, Tag, Set, cacheWay);	//Determine if there is a cache hit or miss.
+        if(HitWay == -1){	//If cache miss->
+            updateOnMiss(tagArray, lruArray, Set, Tag, cacheWay); //Update tagArray and LRU array
+            //printTagArray(lruArray, numSets, cacheWay);
+            totalAccesses++; //Increment total number of cache accesses
+        }
+            else{
+                if(HitWay>-1){ 	//If cache hit ->
+                updateOnHit(lruArray, Set, HitWay, cacheWay); //Update tagArray and LRU array
+                //printTagArray(lruArray, numSets, cacheWay);
+                Hits++;	//Increment Hits
+                totalAccesses++; //Increment # of cache accesses
+                }
+                             else return -1; 	//Other wise exit main method.
+            }
+    }
+    fclose(f);	//Close file
+    missRate = (1 - Hits/totalAccesses); //Calculate miss rate.
+    
+    
+    printf("%s %d %d %d %f \n", fileName,cacheSize, lineSize,cacheWay,missRate); //Print filename, cache size, line size, cacheway, and missRate.
+    return 0;
+}
+
+int numBits(int x){ //Log 2() function
+    int i = 0;
+    while(x > 1){ //Determine # of times input can be divided by 2.
+        x = x/2;
+        i++;
+    }
+return i; //Return log2() value.
+}
+
+int whichSet(unsigned int Trace, int tagBitLength, int setIndexLength, int offSetLength){ //Calculates the set of a particular trace.
+    Trace = Trace>>offSetLength; //Shift Right to remove offset bits.
+    //printf("Shift 1: %x\n", Trace);
+    Trace = Trace<<(tagBitLength+offSetLength); //Shift Left to remove tag bots
+    //printf("Shift2: %x\n", Trace); 
+    Trace = Trace>>(tagBitLength+offSetLength); //Shift right to move set bits back to original position.
+    //printf("Set: %x\n", Trace);
+    return Trace; //Return Set.
+}
+
+int setindexLength(int cacheSize, int lineSize, int cacheWay){	//Calculate number of set bits in trace
+    int setBits = numBits(cacheSize/(lineSize*cacheWay)); 
+    //printf("Number of Set Bits: %d\n",setBits);
+    return setBits; //Return number of set bits.
+}
+
+int offsetLength(int lineSize){		//Determine number of offset bits in Trace
+    int offSetBits = numBits(lineSize); 
+  //  printf("Number of Offset Bits: %d\n", offSetBits);
+    return offSetBits; //Return off set bits.
+}
+
+int tagBits(int tagBitLength, unsigned int Trace){ //Determine number of tag bits in Trace
+     //   printf("Trace: %x\n", Trace);
+        Trace = Trace>>(32-tagBitLength); //Shift trace to the right by 32- tag bit length
+     //   printf("Tag: %x\n", Trace);
+        return Trace; 	//Return number of tag puts.
+}
+
+//void printTagArray(unsigned int **TagArray, int numSets, int cacheWay ){	//Prints inputted two by two array for debugging.
+  // int i,j;
+   //for (i=0; i<numSets; i++)
+     //for (j=0; j<cacheWay; j++)
+      //printf("array[%2d][%2d]=%d\n",i, j, TagArray[i][j]);
+      //}
+
+int hitWay(unsigned int **TagArray, unsigned int Tag, unsigned int Set, int cacheWay){ 	//Determine if there is a hit in the cache.
+    int i;
+    for(i = 0; i<cacheWay; i++){ //For the entire set see if there is a match on any of the cache ways.
+        if(TagArray[Set][i] == Tag){
+            //printf("Hit on cacheWay %d!\n", i);  
+            return i; 		//If there is a match, return the cache way the match occurred on.
+            }
+        }
+               // printf("Miss!\n"); 
+                return -1;	//Else return -1.
+    }
+    
+    void updateOnMiss(unsigned int **tagArray, unsigned int **lruArray, int Set, int Tag, int cacheWay){
+        int i;
+        int maxLRUIndex = 0;
+        int maxLRUVal = lruArray[Set][0];
+        for(i=0; i<cacheWay;i++){		
+            if(lruArray[Set][i] == -1){		//Find the highest LRU value in cache on particular set.
+                maxLRUIndex = i;	//If LRU array is empty at cache way, set that to the maxLRU index and break out of loop.
+                break;
+            }
+            else{
+                if(lruArray[Set][i] > maxLRUVal){	//If current cache way has higher LRU value, set that to maxLRU value at that cache way.
+                    maxLRUIndex = i;
+                    maxLRUVal = lruArray[Set][i];
+                }
+                lruArray[Set][i]++; //Increment every set in  LRU array as you go through.
+            }
+        }
+        tagArray[Set][maxLRUIndex] = Tag;	//Replace the maxLRU cache way in tagArray with new trace's tag.
+        lruArray[Set][maxLRUIndex] = 0; 	//Set that value of the LRU array to zero.
+}
+
+void updateOnHit(unsigned int **lruArray, int Set, int cacheHit, int cacheWay){	//If hit:
+    int j;
+    for(j=0; j<cacheWay;j++){		//Go through cache arrays
+        if(j == cacheHit) lruArray[Set][j] = 0;		//Set LRUarray of hit cache way equal to 0.
+        else lruArray[Set][j]++;	//Increment rest of LRU array at that set.
+    }
+
+}
+
