@@ -1,0 +1,946 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <assert.h>
+
+#define SINGLE 1
+#define BATCH 0
+#define REG_NUM 32
+struct inst{
+    enum op{ADD,ADDI,SUB,MUL,BEQ,LW,SW,NOP,HALT};
+    enum op OP;
+    int rd;
+    int rs;
+    int rt;
+    short int Imm;
+};
+
+void removeSpaces(char* source) // removes white space from text
+{
+  char* i = source;
+  char* j = source;
+  while(*j != 0)
+  {
+    *i = *j++;
+    if(*i != ' ')
+      i++;
+  }
+  *i = 0;
+}
+int printInst(struct inst opcode){
+enum op{ADD,ADDI,SUB,MUL,BEQ,LW,SW,NOP,HALT};
+if(opcode.OP == HALT){
+  printf("%s", "haltSimulation\n");
+ return 0;
+ }
+if((opcode.OP==ADD)||(opcode.OP==SUB)||(opcode.OP==MUL)){
+    if(opcode.OP==ADD) printf("%s", "add");if(opcode.OP==SUB) printf("%s", "sub");if(opcode.OP==MUL) printf("%s", "mul");
+    printf(" %d",opcode.rd);
+    printf(" %d",opcode.rs);
+    printf(" %d\n",opcode.rt);
+    }
+    if((opcode.OP==LW)||(opcode.OP==SW)){
+    if(opcode.OP==LW) printf("%s", "lw");if(opcode.OP==SW)printf("%s", "sw");
+    printf(" %d",opcode.rt);
+    printf(" %d",opcode.Imm);
+    printf(" %d\n",opcode.rs);
+    }
+    if(opcode.OP==ADDI){
+      printf("%s", "addi");
+      printf(" %d",opcode.rt);
+      printf(" %d",opcode.rs);
+      printf(" %d\n",opcode.Imm);
+    }
+    if((opcode.OP==BEQ)){
+    printf("%s", "beq");
+    printf(" %d",opcode.rs);
+    printf(" %d",opcode.rt);
+    printf(" %d\n",opcode.Imm);
+    }
+    return 1;
+}
+
+struct inst instructionGet(char* line){
+    enum op{ADD,ADDI,SUB,MUL,BEQ,LW,SW,NOP,HALT};
+    enum states{Instruction, Register, Immediate, Comma, Parenth,End};   //Define states of state machine
+    int i=0;  //Initialize necessary constants
+    int j=0;
+    int d=0;
+    int r=0;
+    int parToggle = 0;
+    int numPar = 0;
+    int runState = 1;
+    int regs[3];
+    int sign = 1;
+    char intregs[2];
+    int Imm;
+    enum states nxt_state[7] = {Register, Comma, Register, Comma, Immediate, End,End};
+    struct inst opcode;
+
+    enum states state = Instruction;
+    while(runState){
+      switch(state){  //Begin State Machine
+      case Instruction:    //Instruction case/state
+        if(line[i] == 'a'){
+            i++;
+            if(line[i] == 'd'){        //If addi Instructions
+              i++;
+              if(line[i] == 'd'){
+                i++;
+                if(line[i] == 'i'){
+                    i++;
+                    state = nxt_state[d];  //Change to next state
+                    d++;
+                    opcode.OP = ADDI;
+                    //printf("addi");
+                    if(line[i]!='$'){printf("ERROR: Illegal opcode\n"); exit(0);}
+                    break;
+                }
+                else{
+                    nxt_state[4] = Register;
+                    state = nxt_state[d];
+                    d++;
+                    opcode.OP = ADD;        //If add instruction
+                    //printf("add");
+                    if(line[i]!='$'){printf("ERROR: Illegal opcode\n"); exit(0);}
+                    break;
+                }
+              }
+            }
+        printf("ERROR: Illegal opcode\n");
+        exit(0);
+      }
+        if(line[i] == 'b'){
+            i++;
+            if(line[i] == 'e'){
+              i++;
+              if(line[i] == 'q'){
+                i++;
+                state = nxt_state[d];
+                d++;
+                opcode.OP = BEQ;        //If beq instruction
+                //printf("beq");
+                if(line[i]!='$'){printf("ERROR: Illegal opcode\n"); exit(0);}
+                break;
+              }
+            }
+        printf("ERROR: Illegal opcode\n");
+        exit(0);
+      }
+        if(line[i] == 's'){
+            i++;
+            if(line[i] == 'w'){
+                i++;
+                nxt_state[2] = Immediate; nxt_state[3] = Parenth; nxt_state[4] = Register; nxt_state[5] = Parenth;
+                state = nxt_state[d];
+                d++;
+                opcode.OP = SW;        //If sw instruction
+                //printf("sw");
+                if(line[i]!='$'){printf("ERROR: Illegal opcode\n"); exit(0);}
+                break;
+            }
+            if(line[i] == 'u'){
+              i++;
+              if(line[i] == 'b'){
+                i++;
+                nxt_state[4] = Register;
+                state = nxt_state[d];
+                d++;
+                opcode.OP = SUB;      //If sub instruction
+                //printf("sub");
+                if(line[i]!='$'){printf("ERROR: Illegal opcode\n"); exit(0);}
+                break;
+              }
+            }
+        printf("ERROR: Illegal opcode\n");
+        exit(0);
+      }
+      if(line[i] == 'm'){
+            i++;
+            if(line[i] == 'u'){
+              i++;
+              if(line[i] == 'l'){
+                i++;
+                nxt_state[4] = Register;
+                state = nxt_state[d];
+                d++;
+                opcode.OP = MUL;      //If mul instruction
+                //printf("mul");
+                if(line[i]!='$'){printf("ERROR: Illegal opcode\n"); exit(0);}
+                break;
+              }
+            }
+        printf("ERROR: Illegal opcode\n");
+        exit(0);
+      }
+      if(line[i] == 'l'){
+            i++;
+              if(line[i] == 'w'){
+                i++;
+                nxt_state[2] = Immediate; nxt_state[3] = Parenth; nxt_state[4] = Register; nxt_state[5] = Parenth;
+                state = nxt_state[d];
+                d++;
+                opcode.OP = LW;          //If lw instruction
+                //printf("lw");
+                if(line[i]!='$'){printf("ERROR: Illegal opcode\n"); exit(0);}
+                break;           
+              }
+        printf("ERROR: Illegal opcode\n");
+        exit(0);
+      }
+      if(line[i] == 'h'){
+          i++;
+          if(line[i] == 'a'){
+            i++;
+            if(line[i] == 'l'){
+              i++;
+              if(line[i] == 't'){
+                i++;
+              if(line[i] == 'S'){
+          i++;
+                if(line[i] == 'i'){
+          i++;
+                if(line[i] == 'm'){
+          i++;
+                if(line[i] == 'u'){
+          i++;
+                if(line[i] == 'l'){
+          i++;
+                if(line[i] == 'a'){
+          i++;
+                if(line[i] == 't'){
+          i++;
+                if(line[i] == 'i'){
+          i++;
+                if(line[i] == 'o'){
+          i++;
+                if(line[i] == 'n'){
+          i++;
+          nxt_state[0] = End;
+          state = nxt_state[d];    //Change to next state
+          d++;
+          opcode.OP = HALT;          //If line is haltSimulation
+          //printf("haltSimulation");
+          break;
+      }}}}}}}}}}}}}}
+      
+      printf("ERROR: Illegal opcode\n");
+      exit(0);
+      break;
+      
+      case Register:        //Register State
+          if(line[i]=='$'){    //If register begins with $
+                i++;
+                if((line[i]>='0')&& (line[i]<='9')){
+                      intregs[0] = line[i];
+                      i++;
+                      if((line[i]>='0')&& (line[i]<='9')){    //Check if Register $number first
+                        intregs[1] = line[i];
+                        i++;
+                        regs[r] = atoi(intregs);
+                        if((regs[r]>31)||((line[i]>='0')&& (line[i]<='9'))){
+                        printf("ERROR: Register out of bounds\n");
+                        exit(0);
+                        }
+                        
+                        //printf(" %d", regs[r]);
+                        r++;
+                        state = nxt_state[d];      //Change to next state
+                        d++;
+                        break;
+                      }
+                      regs[r] = intregs[0]-'0';
+                      //printf(" %d",regs[r]);
+                      r++;
+                      state = nxt_state[d];
+                      d++;
+                      break;
+                }
+                
+                if(line[i]=='z'){
+                    i++;
+                    if(line[i] == 'e'){
+                        i++;
+                        if(line[i] == 'r'){      //Check if $zero register
+                            i++;
+                            if(line[i] == 'o'){
+                                i++;
+                                regs[r] = 0;
+                                //printf(" %d",regs[r]);
+                                r++;
+                                state = nxt_state[d];
+                                d++;
+                                break;
+                            }
+                        }
+                    }
+                printf("ERROR: Invalid Register\n"); exit(0); break;
+                }
+                if(line[i]=='a'){
+                    i++;
+                    if(line[i]=='t'){    //Check if $at register
+                      i++;
+                      regs[r] = 1;
+                      //printf(" %d",regs[r]);
+                      r++;
+                      state = nxt_state[d];
+                      d++;
+                      break;
+                    }
+                    if((line[i]>='0')&& (line[i]<='3')){
+                        regs[r] = (int)line[i]-'0'+4;
+                        i++;
+                        //printf(" %d",regs[r]);      //Check if $a0-3 register
+                        r++;
+                        state = nxt_state[d];
+                        d++;
+                        break;
+                    }
+                printf("ERROR: Invalid Register\n"); exit(0); break;
+                }
+                if(line[i]=='v'){
+                    i++;
+                    if((line[i]>='0')&& (line[i]<='1')){
+                        regs[r] = (int)line[i]-'0'+2;      //Check if $v0-1 register
+                        i++;
+                        //printf(" %d",regs[r]);
+                        r++;
+                        state = nxt_state[d];
+                        d++;
+                        break;
+                    }
+                printf("ERROR: Invalid Register\n"); exit(0); break;
+                }
+                if(line[i]=='t'){
+                    i++;
+                    if((line[i]>='0')&& (line[i]<='7')){
+                        regs[r] = (int)line[i]-'0'+8;      //Check if $t0-7 registers
+                        i++;
+                        //printf(" %d",regs[r]);
+                        r++;
+                        state = nxt_state[d];
+                        d++;
+                        break;
+                    }
+                    if((line[i]>='8')&& (line[i]<='9')){
+                        regs[r] = (int)line[i]-'0'+24-8;      //Check if $t8-9 registers
+                        i++;
+                        //printf(" %d",regs[r]);
+                        r++;
+                        state = nxt_state[d];
+                        d++;
+                        break;
+                    }
+                printf("ERROR: Invalid Register\n"); exit(0); break;
+                }
+                if(line[i]=='s'){
+                    i++;
+                    if((line[i]>='0')&& (line[i]<='7')){
+                        regs[r] = (int)line[i]-'0'+16;
+                        i++;
+                        //printf(" %d",regs[r]);          //Check if $s0-7 registers
+                        r++;
+                        state = nxt_state[d];
+                        d++;
+                        break;
+                    }
+                    if(line[i]=='p'){
+                      regs[r] = 29;
+                      i++;
+                      //printf(" %d",regs[r]);        //Check if $sp register
+                      r++;
+                      state = nxt_state[d];
+                      d++;
+                      break;
+                    }
+                  printf("ERROR: Invalid Register\n"); exit(0); break;
+                }
+                if(line[i]=='k'){
+                    i++;
+                    if((line[i]>='0')&& (line[i]<='1')){
+                        regs[r] = (int)line[i]-'0'+26;
+                        i++;
+                        //printf(" %d",regs[r]);      //Check if $k0-1 registers
+                        r++;
+                        state = nxt_state[d];
+                        d++;
+                        break;
+                    }
+                    printf("ERROR: Invalid Register\n"); exit(0); break;
+                }
+                if(line[i]=='g'){
+                    i++;
+                    if(line[i]=='p'){
+                      regs[r] = 28;
+                      i++;
+                      //printf(" %d",regs[r]);      //Check if $gp register
+                      r++;
+                      state = nxt_state[d];
+                      d++;
+                      break;
+                    }
+                    printf("ERROR: Invalid Register \n"); exit(0); break;
+                }
+                if(line[i]=='f'){
+                    i++;
+                    if(line[i]=='p'){
+                      regs[r] = 30;
+                      i++;
+                      //printf(" %d",regs[r]);        //Check if $fp register
+                      r++;
+                      state = nxt_state[d];
+                      d++;
+                      break;
+                    }
+            printf("ERROR: Invalid Register\n"); exit(0); break;
+                }
+                if(line[i]=='r'){
+                    i++;
+                    if(line[i]=='a'){
+                      regs[r] = 31;
+                      i++;
+                      //printf(" %d",regs[r]);        //Check if $ra register
+                      r++;
+                      state = nxt_state[d];
+                      d++;
+                      break;
+                    }
+                    printf("ERROR: Invalid Register\n"); exit(0); break;
+                }
+                
+           printf("ERROR: Invalid Register\n"); exit(0); break;     
+          }
+          printf("ERROR: Missing $\n"); exit(0); 
+          break;
+          
+          
+      case Comma:            //Comma state
+        if(line[i]!=','){
+        printf("Invalid Syntax");
+        exit(0);
+        }
+        while(line[i]==','){      //Increments pointer until another character appears
+            i++;
+        }
+        state=nxt_state[d];
+        d++;
+        break;
+        
+        case Immediate:{    //Immediate state
+        if(line[i] == '-'){
+            i++;                    //Check if Immediate is negative.
+            sign = -1;    
+        }
+        if(!((line[i]>='0')&&(line[i]<='9'))){
+          printf("Invalid Immediate Value\n");      //Retrieve Immediate Values
+          exit(0);
+        }
+        while((line[i]>='0')&&(line[i]<='9')){
+                j++;
+                i++;
+        }
+        char immArr[5];
+        int q;
+        for(q = 0; q<5; q++) immArr[q] = (char) NULL;
+        for(q = 0; q<j; q++) immArr[q] = line[i-j+q];  //Store Immediate in array
+        Imm = sign*atoi(immArr);
+        if((Imm>32767) || (Imm < -32767)){
+          printf("ERROR: Immediate out of bounds\n");    //Check if Immediate is too large
+          exit(0);        
+        }
+        //printf(" %d", Imm);
+        state = nxt_state[d];
+        d++;
+        break;
+        }
+        
+        case Parenth:{    //Parenthesis State
+        if((line[i]!='(')&&(line[i]!=')')){
+          printf("ERROR: Missing/no parenthesis\n");
+          exit(0);
+        }
+        if(parToggle==0){
+        while(line[i]=='('){
+          i++;
+          numPar++;
+        }
+        if(line[i] ==')'){
+          printf("ERROR: Empty Parenthesis\n");    //Check if imbalanced/non complete parenthesis on both sides
+          exit(0);
+        }
+        else{
+        parToggle = 1;
+        state = nxt_state[d];
+        d++;
+        break;
+          }
+        }
+        if(parToggle==1){
+         while(line[i]==')'){
+          i++;
+          numPar--;
+        }
+        if(line[i] =='('){
+          printf("ERROR: Empty Parenthesis\n");
+          exit(0);
+        }
+        if(numPar!=0){
+        printf("\nERROR: Mismatched Parenthesis\n");
+        exit(0);
+        }
+        state = nxt_state[d];
+        d++;
+        break;
+        }
+        
+        }
+        
+    case End:{    //End State
+      if(line[i]=='\n'){
+        //printf("\n");            //If end state is reached, leave machine.
+        runState = 0;
+        break;
+      }
+    
+    }
+      
+    default:
+        //printf("\n");
+        runState = 0;
+        break;
+      }
+    
+    }
+    
+    if((opcode.OP==ADD)||(opcode.OP==SUB)||(opcode.OP==MUL)){
+    opcode.rd=regs[0];
+    opcode.rs=regs[1];                    //Set necessary registers for r type instructions
+    opcode.rt=regs[2];
+    }
+    if((opcode.OP==LW)||(opcode.OP==SW)||(opcode.OP==ADDI)){
+    opcode.rt = regs[0];
+    opcode.rs = regs[1];              //Set necessary registers for i type instructions. 
+    opcode.Imm = Imm;
+    }
+    if((opcode.OP==BEQ)){
+    opcode.rs = regs[0];
+    opcode.rt = regs[1];
+    opcode.Imm = Imm;
+    }
+
+
+    return opcode;          //Return final opcode
+}
+
+struct latch{          //Latch struct
+    struct inst opc;
+    int RD1;
+    int RD2;
+    int WADD;
+    int PC;
+    int ALUout;
+    int addBranch;
+    int branchFlag;
+    int RAWFlag;
+    int EXFlag;
+    int MEMFlag;
+    int stale;
+    int SEIMM;
+    int Freeze;
+    int stageCount;
+    int stageCount1;
+};
+
+void IF(struct inst IM[], struct latch* IFID, int c){    //IF stage
+  enum op{ADD,ADDI,SUB,MULT,BEQ,LW,SW,NOP,HALT};
+    static int PC = -1;
+    static count = 0;
+    
+    if((count == 0)&&(IFID->Freeze==0)){
+      PC++;
+      if(IM[PC].OP==HALT)count = 1;      //If there are no instructions active in IF, begin
+      else count = c;
+    }
+    
+    if((IFID->Freeze==0)&&(IFID->EXFlag==0)&&(IFID->MEMFlag==0)&&(IFID->RAWFlag==0)&&(IFID->branchFlag<1)&&(count==1)){      
+      if(IFID->branchFlag==-1){
+        PC = IFID->addBranch;      //If no hazards and instruction is complete, send to next latch
+        PC++;
+        IFID->branchFlag = 0;
+        }
+      assert(!(PC<0));
+      assert(!(PC>=512));
+      IFID->opc = IM[PC];
+      //printf("%d\n",  PC);
+      if(!(IFID->opc.OP==HALT))IFID->stale=0;
+      if(!(IFID->opc.OP==HALT))IFID->PC = PC;
+      if(IM[PC].OP==HALT){
+      IFID->Freeze =  1;
+      //printf("%s\n", "FREEZE!");
+      }
+      count--;
+      if(!(IFID->opc.OP==HALT)){
+      IFID->stageCount++;              //Active in stage
+      //printf("SC: %d \n", IFID->stageCount);
+      }
+    }
+    if(count>1){        //Decrement active instructions in IF
+       count--;
+       IFID->stageCount++;
+      // printf("Count: %d\n", count);
+      // printf("SC: %d \n", IFID->stageCount);
+    }
+}
+void ID(struct latch* IFID, struct latch* IDEX, long *mips_reg, int *rawArray){    //ID Stage
+  enum op{ADD,ADDI,SUB,MULT,BEQ,LW,SW,NOP,HALT};
+    
+    if((IFID->stale==0)&&(IDEX->EXFlag==0)&&(IDEX->MEMFlag==0)){    //If no hazards in front of ID
+      if((IFID->RAWFlag==1)){      //Check if RAW Flag is resolved
+        if((IFID->opc.OP==ADD)||(IFID->opc.OP==SUB)||(IFID->opc.OP==MUL)||(IFID->opc.OP==SW)||(IFID->opc.OP==BEQ)){
+          if((rawArray[IFID->opc.rs]==0)&&(rawArray[IFID->opc.rt]==0))
+              IFID->RAWFlag = 0;      //IF resolved set to 0
+        }
+       if((IFID->opc.OP==ADDI)||(IFID->opc.OP==LW)){
+         if(rawArray[IFID->opc.rs]==0)
+             IFID->RAWFlag = 0;
+       }
+      }
+      
+      if((IFID->RAWFlag==0)){    //Check if RAWFlag is created
+        if((IFID->opc.OP==ADD)||(IFID->opc.OP==SUB)||(IFID->opc.OP==MUL)||(IFID->opc.OP==SW)||(IFID->opc.OP==BEQ)){
+          if((rawArray[IFID->opc.rs]>0)||(rawArray[IFID->opc.rt]>0))
+              IFID->RAWFlag = 1;    //If RAWFlag is created, flag
+          else if((!(IFID->opc.OP==SW))&&(!(IFID->opc.OP==BEQ)))rawArray[IFID->opc.rd]++;
+          
+          }
+        if((IFID->opc.OP==ADDI)||(IFID->opc.OP==LW)){
+          if(rawArray[IFID->opc.rs]>1)
+            IFID->RAWFlag=1;         //If RAWFlag is created, flag
+          else rawArray[IFID->opc.rt]++;
+        }
+      }
+
+    }
+  
+  
+    if((IFID->stale ==0)&&(IDEX->EXFlag==0)&&(IDEX->MEMFlag==0)&&(IFID->RAWFlag==0)&&(IFID->branchFlag==0)){  //If no hazards
+      if((IFID->opc.OP==ADD)||(IFID->opc.OP==SUB)||(IFID->opc.OP==MUL)){
+      IDEX->PC = IFID->PC;
+      IDEX->opc = IFID->opc;
+      IDEX->WADD = IFID->opc.rd;            //Transfer Information from IFID to IDEX
+      IDEX->RD1 = mips_reg[IFID->opc.rs];
+      IDEX->RD2 = mips_reg[IFID->opc.rt];    //r type instructions
+      IFID->stale = 1;
+      //printf("%s\n", "addID");
+      }
+      
+      if((IFID->opc.OP==ADDI)||(IFID->opc.OP==LW)){    //I type instructions
+      IDEX->PC = IFID->PC;
+      IDEX->RD1 = mips_reg[IFID->opc.rs];
+      IDEX->WADD = IFID->opc.rt;
+      IDEX->SEIMM = IFID->opc.Imm;
+      IDEX->opc = IFID->opc;
+      IFID->stale = 1;
+      //printf("%s\n", "addiID");
+      }
+      
+      if((IFID->opc.OP==SW)){        //SW Instruction
+      IDEX->PC = IFID->PC;
+      IDEX->RD1 = mips_reg[IFID->opc.rs];
+      IDEX->RD2 = mips_reg[IFID->opc.rt];
+      IDEX->SEIMM = IFID->opc.Imm;
+      IDEX->opc = IFID->opc;
+      IFID->stale = 1;
+     // printf("%s","ID-SW");
+      }
+      
+      if((IFID->opc.OP==BEQ)){    //BEQ Instruction
+      IDEX->PC = IFID->PC;
+      IDEX->RD1 = mips_reg[IFID->opc.rs];
+      IDEX->RD2 = mips_reg[IFID->opc.rt];
+      IDEX->SEIMM = IFID->opc.Imm;
+      IDEX->opc = IFID->opc;
+      IFID->stale = 1;
+      IFID->branchFlag = 1;      //Create branchFlag
+      }
+      IDEX->stageCount++;
+      IDEX->stale = 0;    //Increment active
+      }
+}
+void EX(struct latch* IDEX, struct latch* EXMEM, int m, int n, struct latch* IFID, struct latch* MEMWB){  //EX Stage
+  enum op{ADD,ADDI,SUB,MULT,BEQ,LW,SW,NOP,HALT};
+    static int count =  0;    
+   
+    if((IDEX->stale==0)){      //If latch info is active and new
+      if((count == 0)){
+        if(IDEX->opc.OP==MUL) count = m;
+          else count = n;
+        IFID->EXFlag = 1;  IDEX->EXFlag = 1;    //Begin processing and flag EXFlag
+      }
+
+        if((count == 1)&&(EXMEM->MEMFlag==0)){        //If EX stage complete and no hazards
+          IFID->EXFlag = 0;  IDEX->EXFlag = 0;    //Resolve EXFlag
+          if((IDEX->opc.OP==ADD)||(IDEX->opc.OP==SUB)||(IDEX->opc.OP==MUL)){
+            EXMEM->PC = IDEX->PC;          //Transfer EX stage information to EXMEM latch
+            EXMEM->opc = IDEX->opc;
+            EXMEM->WADD = IDEX->WADD;
+            //printf("%s\n", "addex");
+            if(IDEX->opc.OP==ADD)
+                    EXMEM->ALUout = IDEX->RD1+IDEX->RD2;      //r type instructions
+            if(IDEX->opc.OP==SUB)
+                    EXMEM->ALUout = IDEX->RD1-IDEX->RD2;
+            if(IDEX->opc.OP==MUL)
+                    EXMEM->ALUout = IDEX->RD1*IDEX->RD2;
+            IDEX->stale = 1;
+          }
+          if((IDEX->opc.OP==ADDI)||(IDEX->opc.OP==LW)||(IDEX->opc.OP==SW)){
+            //printf("%s\n", "addiex");
+            EXMEM->PC = IDEX->PC;
+            EXMEM->opc = IDEX->opc;
+            EXMEM->ALUout = IDEX->RD1+IDEX->SEIMM;        //i type instructions
+            if((IDEX->opc.OP==SW)){
+              EXMEM->RD2 = IDEX->RD2;
+            }
+            else EXMEM->WADD = IDEX->WADD;
+            
+            IDEX->stale = 1;  
+            //printf("%s","EX-SW"); 
+        }
+            if((IDEX->opc.OP==LW)||(IDEX->opc.OP==SW)){
+              if((EXMEM->ALUout)%4 != 0){
+                printf("Misaligned memory address!\n");        //Check if misaligned
+                exit(0);
+              }
+              EXMEM->ALUout = (EXMEM->ALUout)/4;
+              assert(!(EXMEM->ALUout>=512));
+              assert(!(EXMEM->ALUout<0));
+            }
+        
+          if((IDEX->opc.OP==BEQ)){
+            EXMEM->opc = IDEX->opc;
+            if((IDEX->RD1-IDEX->RD2)==0){                //Check if BEQ is resolved
+                IFID->addBranch = IDEX->PC+IDEX->SEIMM;
+                IFID->branchFlag = -1;          //If branch is true, set to -1
+            } 
+            else{
+                IFID->branchFlag = 0;        //else 0
+            }
+            IDEX->stale = 1;
+          }
+          EXMEM->stale = 0;
+          EXMEM->stageCount++;      //Incrememnt active stage
+        count--;
+        }
+      if(count>1){
+       EXMEM->stageCount++;
+       count--;
+       }
+    }
+}
+void MEM(struct latch* EXMEM, struct latch* MEMWB, int *mips_mem, int c, struct latch* IFID, struct latch* IDEX){  //MEM Stage
+  enum op{ADD,ADDI,SUB,MULT,BEQ,LW,SW,NOP,HALT};
+    static int count = 0;
+  
+    if((EXMEM->stale==0)){    //If information is active and new, begin processing
+      if((count == 0)){
+        if((EXMEM->opc.OP==LW)||(EXMEM->opc.OP==SW)) count = c;
+          else count = 1;
+        IFID->MEMFlag = 1;  IDEX->MEMFlag = 1; EXMEM->MEMFlag = 1;  //Flag MEMFlag
+      }  
+      if ((count==1)){          //If info is finished processing, send to MEMWB latch
+      if((EXMEM->opc.OP==ADDI)||(EXMEM->opc.OP==ADD)||(EXMEM->opc.OP==SUB)||(EXMEM->opc.OP==MUL)){
+        //printf("%s\n", "addmem");
+        MEMWB->opc = EXMEM->opc;
+        MEMWB->PC = EXMEM->PC;
+        MEMWB->ALUout = EXMEM->ALUout;        //r type instructions and addi
+        MEMWB->WADD = EXMEM->WADD;    
+        EXMEM->stale=1;
+      }
+      
+      if((EXMEM->opc.OP==LW)){
+          MEMWB->opc = EXMEM->opc;
+          MEMWB->PC = EXMEM->PC;
+          MEMWB->ALUout = mips_mem[EXMEM->ALUout];    //lw instruction
+          MEMWB->WADD = EXMEM->WADD;
+          EXMEM->stale=1;
+          MEMWB->stageCount++;
+      }
+      if((EXMEM->opc.OP==SW)){
+        MEMWB->opc = EXMEM->opc;
+        MEMWB->PC = EXMEM->PC;
+        mips_mem[EXMEM->ALUout] = EXMEM->RD2;      //sw instruction
+        EXMEM->stale=1;
+        MEMWB->stageCount++;
+        //printf("%s","MEM-SW");
+      }
+      
+      if(EXMEM->opc.OP==BEQ){
+        MEMWB->opc = EXMEM->opc;            //beq instruction
+        EXMEM->stale=1;
+      }
+    
+      MEMWB->stale = 0;
+      if(EXMEM->opc.OP==HALT){
+       EXMEM->stale = 1;
+       //MEMWB->opc = EXMEM->opc;
+       //printf("%s\n","HALT-MEM");
+       }
+      IFID->MEMFlag = 0;  IDEX->MEMFlag = 0; EXMEM->MEMFlag = 0;    //Resolve MEMFlag
+      count--;       
+    }
+    if(count>1) {
+    count--;
+    MEMWB->stageCount++;
+    }
+  }
+
+}
+void WB(struct latch* MEMWB, long *mips_reg, int *active, int *rawArray){    //WB Stage
+  enum op{ADD,ADDI,SUB,MULT,BEQ,LW,SW,NOP,HALT};
+    static int i = 0;
+    if((MEMWB->stale==0)){
+    
+    if((MEMWB->opc.OP==ADDI)||(MEMWB->opc.OP==ADD)||(MEMWB->opc.OP==SUB)||(MEMWB->opc.OP==MUL)||(MEMWB->opc.OP==LW)){
+      //printf("%s\n", "addwb");
+      mips_reg[MEMWB->WADD] = MEMWB->ALUout;
+      rawArray[MEMWB->WADD]--;
+      //printf("%d Register %d\n", MEMWB->ALUout, MEMWB->WADD);    //Write back necessary information
+      MEMWB->stageCount1++;
+    }
+    if((MEMWB->opc.OP==SW)||(MEMWB->opc.OP==BEQ)){    //Else do nothing
+    //printf("%s\n", "SW-WB");
+    }
+    
+    
+    MEMWB->stale=1;    //Make MEMWB Stale
+}
+}
+main (int argc, char *argv[]){
+  enum op{ADD,ADDI,SUB,MULT,BEQ,LW,SW,NOP,HALT};
+  
+    int mips_mem[512];
+    int rawArray[REG_NUM];
+    struct inst IM[512];
+   	struct latch IFID; IFID.stale = 1;
+  	struct latch IDEX; IDEX.stale = 1;        //Initialize latches and their initial values
+  	struct latch EXMEM; EXMEM.stale = 1;
+  	struct latch MEMWB;  MEMWB.stale =1;
+ 
+    int sim_mode=0;//mode flag, 1 for single-cycle, 0 for batch
+  	int c,m,n;
+  	int i;//for loop counter
+	  long mips_reg[REG_NUM];
+  	long pgm_c=0;//program counter
+	  long sim_cycle=0;//simulation cycle counter
+  	//define your own counter for the usage of each pipeline stage here
+   double ifUtil, idUtil, exUtil, memUtil, wbUtil;
+   
+   int test_counter=0;
+	  FILE *input=NULL;
+	  FILE *output=NULL;
+	  printf("The arguments are:");
+	
+	  for(i=1;i<argc;i++){
+	  	printf("%s ",argv[i]);
+  	}
+	  printf("\n");
+	  if(argc==7){
+	  	if(strcmp("-s",argv[1])==0){
+  			sim_mode=SINGLE;
+  		}
+		else if(strcmp("-b",argv[1])==0){
+			sim_mode=BATCH;
+		}
+		else{
+			printf("Wrong sim mode chosen\n");
+			exit(0);
+		}
+		
+		m=atoi(argv[2]);
+		n=atoi(argv[3]);
+		c=atoi(argv[4]);
+		input=fopen(argv[5],"r");
+		output=fopen(argv[6],"w");
+		
+  	  }
+  	
+    	else{
+  		printf("Usage: ./sim-mips -s m n c input_name output_name (single-sysle mode)\n or \n ./sim-mips -b m n c input_name  output_name(batch mode)\n");
+  		printf("m,n,c stand for number of cycles needed by multiplication, other operation, and memory access, respectively\n");
+  		exit(0);
+  	}
+  	if(input==NULL){
+  		printf("Unable to open input or output file\n");
+  		exit(0);
+  	}
+  	if(output==NULL){
+  		printf("Cannot create output file\n");
+  		exit(0);
+  	}
+  	//initialize registers and program counter
+  	if(sim_mode==1){
+  		for (i=0;i<REG_NUM;i++){
+  			mips_reg[i]=0;
+  		}
+  	}
+  	
+	//start your code from here
+    char line[256]; 
+    i = 0;
+    while (fgets(line, sizeof(line), input)) {     
+      removeSpaces(line);      //Remove spaces from line
+      IM[i] = instructionGet(line);       //Store instruction from line into IM
+      i++;
+       } 
+       
+    int count = 0;
+    //while(printInst(IM[count])) count++;
+  
+    int active = 1;
+    while(active==1){      //Start Pipeline
+    WB(&MEMWB, mips_reg, &active, rawArray);
+    MEM(&EXMEM, &MEMWB, mips_mem, c, &IFID, &IDEX);
+    EX(&IDEX, &EXMEM, m, n, &IFID, &MEMWB);            //Begin each stage and move information from latch to latch
+    ID(&IFID, &IDEX, mips_reg, rawArray);
+    IF(IM, &IFID, c);
+ 	  sim_cycle+=1;  //Incremet cycle counter
+    if((IFID.Freeze==1)&&(IFID.stale==1)&&(IDEX.stale==1)&&(EXMEM.stale==1)&&(MEMWB.stale==1))active = 0;  //If pipeline       complete, leave loop
+   	if(sim_mode==1){
+		  printf("cycle: %d register value: ",sim_cycle);  //Print single cycle information
+		  for (i=1;i<REG_NUM;i++){
+			  printf("%d  ",mips_reg[i]);
+		  }
+      pgm_c = sim_cycle;
+		  printf("program counter: %d\n",pgm_c);
+		  printf("press ENTER to continue\n");
+		  while(getchar() != '\n');
+	    }
+    }
+    pgm_c = sim_cycle;
+    ifUtil = ((float)IFID.stageCount)/((float)pgm_c);
+    idUtil = ((float)IDEX.stageCount)/((float)pgm_c);
+    exUtil = ((float)EXMEM.stageCount)/((float)pgm_c);    //Find utilization quantities.
+    memUtil = ((float)MEMWB.stageCount)/((float)pgm_c);
+    wbUtil = ((float)MEMWB.stageCount1)/((float)pgm_c);
+    
+   	if((sim_mode==0)){    //If batch mode
+		fprintf(output,"program name: %s\n",argv[5]);
+		fprintf(output,"stage utilization: %f %f  %f  %f  %f \n",
+                             ifUtil, idUtil, exUtil, memUtil, wbUtil);
+                     // add the (double) stage_counter/sim_cycle for each 
+                     // stage following sequence IF ID EX MEM WB
+		
+		fprintf(output,"register values ");
+		for (i=1;i<REG_NUM;i++){
+			fprintf(output,"%d  ",mips_reg[i]);
+		}
+		fprintf(output,"%d\n",pgm_c);
+	
+	}
+	//close input and output files at the end of the simulation
+	fclose(input);
+	fclose(output);
+	return 0;
+    
+}
