@@ -1,0 +1,118 @@
+module receiver(clk, rst, midiIn, LED, TIMER);	//Top-level module
+input clk, rst, midiIn;
+output[7:0] LED;
+output[11:0] TIMER;
+wire clk, rst, midiIn;	//Initiate top-level inputs and outputs
+wire meta;
+reg[1:0] byteCount;
+wire[11:0] TIMER;
+reg r1, r2, r3;
+
+	
+TestTimer timer(clk, rst, meta, TIMER);
+midiNotes midiOut(clk, rst, TIMER, meta, LED);		//Initiate top-level submodules
+metaStab metaOut(clk, rst, midiIn, meta);
+
+endmodule
+
+
+module TestTimer(clk, rst, meta, TIME);		//Timer module
+input clk, rst,meta;
+output reg[11:0] TIME;
+
+reg[11:0] r1,r2,r3;
+parameter MAX_TIME = 12'b111011000000;
+parameter B1_beg = 12'b0;
+parameter B2_beg = 12'b010011111111;	//Timer constants
+parameter B3_beg = 12'b100111111111;
+
+
+always@(*) begin
+	if((TIME==MAX_TIME)||((meta==1)&&(TIME==12'b0)))	//If timer reaches maximum value, reset timer register
+		r1 = 12'b0;
+	else
+		r1 = r2;
+	if((TIME!=B1_beg)&&(TIME!=B2_beg)&&(TIME!=B3_beg))	//If current state of timer is in between bytes, increment value of timer
+		r2 = TIME + 1'b1;
+	else
+		r2 = r3;
+	if(((TIME==B1_beg)||(TIME==B2_beg)||(TIME==B3_beg))&&(meta==0))		//If start bit is detected, increment counter
+		r3 = TIME + 1'b1;
+	else
+		r3 = TIME;
+end
+
+
+always@(posedge clk)begin
+	if(!(rst))begin
+		TIME <= 12'b0;		//Reset timer on reset
+	end else begin
+	TIME <= r1;
+	end
+end
+endmodule 
+
+module midiNotes(clk, rst, count, sample, Note);	//midiNote module
+input clk, rst, sample;
+input [11:0] count;
+output[7:0] Note;
+reg[7:0] Note;
+wire n1,n2,n3,n4,n5,n6,n7,n8;
+
+parameter b1 = 12'b010111000000,b2 = 12'b011001000000,b3 = 12'b011011000000,b4 = 12'b011101000000,b5 = 12'b011111000000,
+b6 = 12'b100001000000,b7 = 12'b100011000000,b8 = 12'b100101000000;	//Define when to sample bits on timer
+
+noteCompare N1(count,b1,sample,Note[0],n1);
+noteCompare N2(count,b2,sample,Note[1],n2);
+noteCompare N3(count,b3,sample,Note[2],n3);
+noteCompare N4(count,b4,sample,Note[3],n4);
+noteCompare N5(count,b5,sample,Note[4],n5);		//Initiate all midiNote submodules to display on LED bar
+noteCompare N6(count,b6,sample,Note[5],n6);
+noteCompare N7(count,b7,sample,Note[6],n7);
+noteCompare N8(count,b8,sample,Note[7],n8);
+
+always@(posedge clk)begin
+	if(!(rst))begin
+		Note <= 8'b0;		//If reset, turn off LEDs.
+	end else begin
+	Note <= {n8,n7,n6,n5,n4,n3,n2,n1};
+	end
+end
+
+endmodule
+
+module noteCompare(count, bitNum, sample, noteIn, noteOut);	//Note comparison module
+input sample, noteIn;
+input[11:0] count, bitNum;
+output noteOut;
+reg r1, noteOut;
+
+always @(*)begin
+	if((count==bitNum))		//If count is equal to bitnumber, sample bit
+		noteOut=r1;
+	else
+		noteOut=noteIn;
+	if(sample==noteIn)		//If sample is equal to current value of LED, set LED to 0.
+		r1 = 0;
+	else
+		r1 = sample;
+end
+endmodule 
+
+module metaStab(clk, rst, midiIn, metaOut);		//Metastability module
+input clk, rst, midiIn;
+output metaOut;
+reg metaIn, metaOut;
+
+always@(posedge clk)begin
+	if(!(rst))begin
+		metaIn <= 1'b1;		//If reset, set metastability flipflops to 1
+		metaOut <= 1'b1;
+	end else begin
+		metaIn <= midiIn;
+		metaOut <=  metaIn;		//Buffer midi input by 2 flipflops.
+	end
+
+end
+
+endmodule 
