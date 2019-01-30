@@ -1,0 +1,219 @@
+#include<io.h>
+#include<util/delay.h>
+#include <avr/interrupt.h>
+
+ISR(TIMER1_COMPA_vect){
+	PORTB = 0x00;
+}
+
+void USART_Init (void){
+	/*Set baud rate */
+	UBRRH = (unsigned char) 0;
+	UBRRL = (unsigned char) 7;
+
+	/*Enable receiver and transmitter */
+	UCSRB = (1<<RXEN)|(1<<TXEN);
+
+	/*Set frame format: 8 data, 1 stop bit */
+	UCSRC = (1<<URSEL)|(3<<UCSZ0);
+}
+
+unsigned char USART_Receive(void){
+
+		/*Wait for data to be received */
+	while ( !(UCSRA & (1<<RXC)) ){
+	if(!(PINA&1))
+	break;
+	}
+
+	return UDR;
+}
+
+void USART_FLUSH(void){
+
+	unsigned char dummy;
+
+	while( UCSRA & (1<<RXC)) dummy = UDR;
+}
+
+void USART_Transmit(unsigned char data){
+
+	/* Wait for empty transmit buffer */
+	while (!(UCSRA & (1<<UDRE)) );
+
+	/* Put data into buffer, sends the data */
+	UDR = data;
+
+}
+
+
+unsigned char EEPROM_Write(unsigned char MIDI1, unsigned char MIDI2, unsigned char MIDI3, unsigned int timer, unsigned char vAddress){
+	
+	unsigned char data[] = {MIDI1, MIDI2, MIDI3, timer, (timer>>8)};
+
+	int i;
+	for(i =0; i<5; i++){
+	vAddress++;
+	/* Wait for completion of previous write*/
+	while(EECR & (1<<EEWE));
+	/*Set up address and data registers */
+	EEAR = vAddress;
+	EEDR = data[i];
+	/*Write logical one to EEMWE */
+	EECR |= (1<<EEMWE);
+	/* Start eprom write by setting EEWE */
+	EECR |=  (1<<EEWE);
+	}
+	
+	while(EECR & (1<<EEWE));
+	/*Set up address and data registers */
+	EEAR = 0;
+	EEDR = vAddress;
+	/*Write logical one to EEMWE */
+	EECR |= (1<<EEMWE);
+	/* Start eprom write by setting EEWE */
+	EECR |=  (1<<EEWE);
+
+	return vAddress;
+}
+
+unsigned char EEPROM_Read(unsigned int uiAddress){
+	
+	/* Wait for completion of previous write */
+	while (EECR & (1<<EEWE));
+	/* Set up address register */
+	EEAR = uiAddress;
+	/* Start eeprom read by writing EERE */
+	EECR |= (1<<EERE);
+
+	/* Return data from data register */
+	return EEDR;
+
+}
+
+int main(void){
+    DDRB = 0xFF; //Set port as output
+	DDRA = 0x00; //Set port as input
+	int recording;
+	int playback;
+	int modify;
+	int noteByte = 1;
+	USART_Init ();	//Initiate USART
+	TCNT1 = 0; 	//Clear count
+	TCCR1B |= (1 <<CS12); //prescaler = 256
+	OCR1A = 0x30D4;		//Define 800ms Timer1 value
+	TIMSK = (1 << OCIE1A); //Enable timer1 overflow interrupt (800ms)
+	sei();	//Enable global interrupts
+	unsigned int timer = 0;
+
+
+	ADMUX = 0x06;			//Choose ADC on pin 6
+	ADCSRA = (1 << ADEN);	//Enable ADC.
+
+
+	unsigned char debug = 0x00;	//Initialize placeholders for MIDI bytes
+	unsigned char MIDI1 = 0x00;
+	unsigned char MIDI2 = 0x00;
+	unsigned char MIDI3 = 0x00;
+	unsigned char vAddress = 0x00;	//Initialize vAddress
+
+	unsigned char pbInit = 0x01;	//Set logic values
+	unsigned char recInit = 0x01;
+
+
+	while(1){
+	recording = (PINA&1);	//Input values of input pins for record, playback, and modify modes.
+	playback = (PINA&2);
+	modify = (PINA&4);
+
+
+
+	if(recording && (!playback)){	//If board is in recording mode 
+	if(recInit){	//If recording switch was just turned on
+	PORTB = 0;	//Set LEDs to 0
+	recInit = 0;	//Set recInit to 0
+	TCNT1 = 0;		//Reset Timer
+	vAddress = 0x00;	//Set vAddress to zero	
+	noteByte = 1; 		//Set noteByte equal to one
+	USART_FLUSH();		//Flush any values in USART
+	}
+	debug = USART_Receive();	//Wait for MIDI Byte to receive
+
+
+
+	if((noteByte == 1)&&(PINA&1)){	//Receive first byte
+	MIDI1 = debug;
+
+	}
+	
+
+	if((noteByte == 2)&&(PINA&1)){	//Receive second byte
+	PORTB = debug;	//Display second byte on LEDs
+	MIDI2 = debug;
+	}
+
+	if((noteByte == 3)&&(PINA&1)){	//Receive third byte
+	MIDI3 = debug;
+	//PORTB = MIDI3;
+	noteByte = 0;
+	}
+
+	if((noteByte == 0)&&(PINA&1)){	//If message is received
+	timer = TCNT1;	//Store timer value
+	TCNT1 = 0;		//Reset Timer
+	vAddress = EEPROM_Write(MIDI1, MIDI2, MIDI3, timer, vAddress);	//Store MIDI signal and timer value in EEProm and return largest value of vAddress
+	//PORTB = vAddress;
+	//TCNT1 = 0; 
+	}
+
+	noteByte++;	//Increment Notebyte
+	}
+	else {
+	recInit=1; 	//Reset recInit value
+	}
+
+	if(playback && (!recording)){	//If playback mode enabled
+		if(pbInit){
+		pbInit = 0;
+		vAddress = EEPROM_Read(0);	//Read largest vAddress from EEPROM
+		TCNT1 = 0;	//Reset timer
+		PORTB = 0;
+		}
+	unsigned char i;
+	for( i=1; i<=vAddress; i+=5){	//Retrieve byte and timer values from EEPROM
+	MIDI1 = EEPROM_Read(i);
+	MIDI2 = EEPROM_Read(i+1);
+	MIDI3 = EEPROM_Read(i+2);
+	timer = (EEPROM_Read(i+3)|(EEPROM_Read(i+4)<<8));
+	TCNT1 = 0;
+	modify = (PINA&4);	//Check if in modify mode
+	if(modify){		//If modifying
+	ADCSRA |= (1<<ADSC);		
+	while(ADCSRA & (1<<ADSC));		//Receive next ADC value
+
+	while(timer/369*ADC > TCNT1){	//Modify timer value by ADC value
+	if(!(PINA&2)) break;	//If playback off break out of while loop
+	}	
+
+	}
+	else	while((timer > TCNT1)){	//Wait for TCNT1 value to reach timer value
+	if(!(PINA&2)) break;	//If playback off break out of while loop
+	}
+	if((PINA&2)){
+	PORTB = MIDI2;	//Transmit MIDI values through USART and set PORTB to second byte
+	USART_Transmit(MIDI1);
+	USART_Transmit(MIDI2);
+	USART_Transmit(MIDI3);
+	}
+	}
+
+	}
+	else {
+	//UCSRB |= (0<<TXEN);
+	pbInit=1;	//Reset playback value
+	}
+
+}
+		
+}
+ 
